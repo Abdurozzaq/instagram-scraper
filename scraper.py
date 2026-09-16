@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-"""
-Instagram Smart Scraper v7
-- Two-phase scraping: Light (basic) + Views (reels only)
-- Skip user_id/user_info if already in DB
-- Track progress: queued/success/failed with retry support
-- Configurable delays for safety
-"""
-
 import json
 import time
 import sqlite3
@@ -33,14 +25,12 @@ DB_CONFIG = {
     "database": "ins_loader"
 }
 
-# Delay settings (seconds)
-DELAY_BETWEEN_POSTS = (2, 4)        # Delay between media_info() calls (Phase 2)
-DELAY_BETWEEN_ACCOUNTS = (55, 120)  # Delay between accounts
-DELAY_ON_RATE_LIMIT = 120           # Wait time if rate limited
+DELAY_BETWEEN_POSTS = (2, 4)
+DELAY_BETWEEN_ACCOUNTS = (55, 120)
+DELAY_ON_RATE_LIMIT = 120
 
 
 def update_status(status):
-    """Update status file for progress tracking"""
     status["timestamp"] = datetime.now().isoformat()
     with open(STATUS_FILE, "w") as f:
         json.dump(status, f, indent=2)
@@ -59,12 +49,10 @@ class InstagramScraper:
         }
 
     def connect_db(self):
-        """Connect to PostgreSQL"""
         self.db_conn = psycopg2.connect(**DB_CONFIG)
         return self.db_conn
 
     def get_sessionid(self):
-        """Get sessionid from Zen browser"""
         db_path = Path.home() / ".var/app/app.zen_browser.zen/.zen/ugeu0vmz.Default (release)/cookies.sqlite"
         if not db_path.exists():
             print("[-] Zen browser cookies not found")
@@ -100,7 +88,6 @@ class InstagramScraper:
             return False
 
     def get_cached_profile(self, username):
-        """Get profile from DB if exists"""
         cur = self.db_conn.cursor()
         cur.execute("SELECT followers, following, posts_count, is_private FROM profiles WHERE username = %s", (username,))
         row = cur.fetchone()
@@ -108,7 +95,6 @@ class InstagramScraper:
         return row
 
     def get_cached_user_id(self, username):
-        """Get user_id from DB if exists (stored in profiles)"""
         cur = self.db_conn.cursor()
         cur.execute("SELECT ig_user_id FROM profiles WHERE username = %s AND ig_user_id IS NOT NULL", (username,))
         row = cur.fetchone()
@@ -116,7 +102,6 @@ class InstagramScraper:
         return row[0] if row else None
 
     def save_profile(self, username, user_info, user_id):
-        """Save/update profile data with user_id"""
         cur = self.db_conn.cursor()
         cur.execute("""
             INSERT INTO profiles (username, ig_user_id, followers, following, posts_count, bio,
@@ -151,7 +136,6 @@ class InstagramScraper:
         cur.close()
 
     def save_post(self, username, post):
-        """Save/update post data (without views in Phase 1)"""
         cur = self.db_conn.cursor()
         cur.execute("""
             INSERT INTO posts (username, shortcode, media_pk, url, type, caption, post_date,
@@ -179,7 +163,6 @@ class InstagramScraper:
         cur.close()
 
     def update_post_views(self, shortcode, views, video_duration=None, has_audio=None):
-        """Update views for a specific post (Phase 2)"""
         cur = self.db_conn.cursor()
         cur.execute("""
             UPDATE posts SET views = %s, video_duration = %s, has_audio = %s, scraped_at = NOW()
@@ -189,14 +172,12 @@ class InstagramScraper:
         cur.close()
 
     def update_target_scraped(self, username):
-        """Update last_scraped_at for target"""
         cur = self.db_conn.cursor()
         cur.execute("UPDATE targets SET last_scraped_at = NOW() WHERE username = %s", (username,))
         self.db_conn.commit()
         cur.close()
 
     def log_error(self, username, error_type, error_msg):
-        """Log scrape error to database"""
         cur = self.db_conn.cursor()
         cur.execute("""
             INSERT INTO scrape_errors (username, error_type, error_message, created_at)
@@ -206,7 +187,6 @@ class InstagramScraper:
         cur.close()
 
     def update_progress_status(self):
-        """Update status file with current progress"""
         update_status({
             "phase": self.progress["phase"],
             "current": self.progress["current"],
@@ -219,20 +199,14 @@ class InstagramScraper:
         })
 
     def print_progress(self):
-        """Print current progress"""
         print(f"\n  Progress: {len(self.progress['success'])} success | {len(self.progress['failed'])} failed | {len(self.progress['queued'])} queued")
 
-    # =========================================
-    # PHASE 1: Light Scrape (basic info only)
-    # =========================================
     def scrape_light(self, username):
-        """Phase 1: Get basic post data without views"""
         result = {"username": username, "success": False, "posts_scraped": 0, "error": None}
 
         try:
             print(f"  [*] Fetching @{username}...")
 
-            # Check if we have cached user_id
             user_id = self.get_cached_user_id(username)
 
             if user_id:
@@ -241,7 +215,6 @@ class InstagramScraper:
                 print(f"  [*] Fetching user_id from API...")
                 user_id = self.client.user_id_from_username(username)
 
-            # Get user info (always refresh for latest follower count etc)
             user_info = self.client.user_info(user_id)
             self.save_profile(username, user_info, user_id)
             print(f"  [+] Profile: {user_info.follower_count:,} followers, {user_info.media_count} posts")
@@ -251,12 +224,10 @@ class InstagramScraper:
                 result["error"] = "Private profile"
                 return result
 
-            # Get all medias (basic info - no views)
             print(f"  [*] Fetching posts...")
             medias = self.client.user_medias(user_id, amount=0)
 
             for media in medias:
-                # Determine type
                 if media.media_type == 2 and media.product_type == "clips":
                     media_type = "reel"
                 elif media.media_type == 2:
@@ -303,7 +274,6 @@ class InstagramScraper:
         return result
 
     def run_phase1(self, usernames=None):
-        """Run Phase 1: Light scrape for all active targets"""
         self.progress["phase"] = "phase1_light"
 
         if usernames:
@@ -345,7 +315,6 @@ class InstagramScraper:
 
             self.update_progress_status()
 
-            # Delay between accounts (except last)
             if i < len(targets) - 1:
                 delay = random.uniform(*DELAY_BETWEEN_ACCOUNTS)
                 print(f"\n  [~] Waiting {delay:.0f}s before next account...")
@@ -364,11 +333,7 @@ class InstagramScraper:
                 print(f"    - @{f['username']}: {f['error']}")
         print(f"{'='*60}")
 
-    # =========================================
-    # PHASE 2: Views Only (reels/videos)
-    # =========================================
     def get_reels_without_views(self):
-        """Get all reels/videos to update views"""
         cur = self.db_conn.cursor()
         cur.execute("""
             SELECT p.shortcode, p.media_pk, p.username
@@ -384,7 +349,6 @@ class InstagramScraper:
         return rows
 
     def run_phase2(self):
-        """Run Phase 2: Fetch views for reels/videos"""
         self.progress["phase"] = "phase2_views"
 
         reels = self.get_reels_without_views()
@@ -425,7 +389,6 @@ class InstagramScraper:
 
             self.update_progress_status()
 
-            # Delay between requests
             if i < len(reels) - 1:
                 delay = random.uniform(*DELAY_BETWEEN_POSTS)
                 time.sleep(delay)
@@ -462,7 +425,6 @@ def main():
             cmd = sys.argv[1]
 
             if cmd == "phase1":
-                # Phase 1 only
                 if len(sys.argv) > 2:
                     usernames = [u.lstrip("@") for u in sys.argv[2:]]
                     scraper.run_phase1(usernames)
@@ -470,18 +432,16 @@ def main():
                     scraper.run_phase1()
 
             elif cmd == "phase2":
-                # Phase 2 only (views for reels)
+
                 scraper.run_phase2()
 
             elif cmd == "full":
-                # Both phases
                 scraper.run_phase1()
                 print("\n[*] Starting Phase 2 after 60s cooldown...")
                 time.sleep(60)
                 scraper.run_phase2()
 
             elif cmd == "retry":
-                # Retry failed from status file
                 if STATUS_FILE.exists():
                     with open(STATUS_FILE) as f:
                         status = json.load(f)
@@ -495,11 +455,9 @@ def main():
                     print("No status file found")
 
             else:
-                # Single username(s)
                 usernames = [u.lstrip("@") for u in sys.argv[1:]]
                 scraper.run_phase1(usernames)
         else:
-            # Default: run phase 1 for all active targets
             scraper.run_phase1()
 
     finally:
