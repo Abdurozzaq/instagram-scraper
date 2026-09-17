@@ -5,7 +5,8 @@ import fs from 'fs';
 
 const SCRAPER_PATH = path.join(process.cwd(), '..', 'scraper.py');
 const STATUS_FILE = path.join(process.cwd(), '..', 'scrape_status.json');
-const VENV_PYTHON = path.join(process.cwd(), '..', '..', 'ig_scraper_env', 'bin', 'python');
+const VENV_PYTHON = path.join(process.cwd(), '..', 'venv',
+  ...(process.platform === 'win32' ? ['Scripts', 'python.exe'] : ['bin', 'python']));
 
 let scrapeProcess: ReturnType<typeof spawn> | null = null;
 

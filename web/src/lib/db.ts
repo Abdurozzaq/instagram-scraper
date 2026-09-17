@@ -1,11 +1,11 @@
 import { Pool } from 'pg';
 
 const pool = new Pool({
-  host: '217.216.72.172',
-  port: 41828,
-  user: 'mooboard',
-  password: 'MooBoard123!',
-  database: 'ins_loader',
+  host: process.env.PGHOST || '127.0.0.1',
+  port: Number(process.env.PGPORT || 5433),
+  user: process.env.PGUSER || 'instagram_app',
+  password: process.env.PGPASSWORD,
+  database: process.env.PGDATABASE || 'ins_loader',
 });
 
 export default pool;
