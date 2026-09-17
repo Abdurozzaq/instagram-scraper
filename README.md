@@ -2,6 +2,10 @@
 
 Smart Instagram scraper with two-phase approach for efficient data collection.
 
+Dokumentasi lengkap berbahasa Indonesia: [Panduan HTML project](docs/project-guide.html).
+Unduh atau buka file HTML tersebut langsung di browser untuk membaca teknologi,
+metode scraping, alur kode, dan langkah penggunaan.
+
 ## Features
 
 - **Phase 1 (Light)**: Scrape basic post data (likes, comments, caption) - ~3 requests per user
@@ -23,15 +27,42 @@ Smart Instagram scraper with two-phase approach for efficient data collection.
 
 ### 1. Python Environment
 
-```bash
+```powershell
 python -m venv venv
-source venv/bin/activate
-pip install instagrapi psycopg2-binary
+.\venv\Scripts\python.exe -m pip install --use-feature=truststore -r requirements.txt
 ```
 
 ### 2. Database
 
-Create PostgreSQL database and update `DB_CONFIG` in `scraper.py`.
+Local Windows setup uses PostgreSQL 17 at `127.0.0.1:5433`, database
+`ins_loader`, and application user `instagram_app`. Credentials are stored in
+`.env` (Python) and `web/.env.local` (Next.js); keep their PG settings in sync.
+These files are ignored by Git. `.env.example` documents the settings.
+
+The local cluster is stored in `.local/pgdata`. After restarting Windows, start it
+from the project root:
+
+```powershell
+& 'C:\Program Files\PostgreSQL\17\bin\pg_ctl.exe' -D .local/pgdata -l .local/postgres.log -o '-h 127.0.0.1 -p 5433' -w start
+```
+
+Stop it when needed:
+
+```powershell
+& 'C:\Program Files\PostgreSQL\17\bin\pg_ctl.exe' -D .local/pgdata -m fast -w stop
+```
+
+The cluster administrator is `postgres`; its generated password is in
+`.local/admin-password.txt`. The application uses its own non-superuser account.
+The schema is in `database/schema.sql`; it can be reapplied using psql with
+`-v ON_ERROR_STOP=1 -f database/schema.sql` while connected as the database owner.
+
+On a fresh machine, create the database and its owner first, apply the schema,
+then copy `.env.example` to `.env` and `web/.env.local` and fill in the credentials.
+
+For Instagram login on Windows, set `INSTAGRAM_SESSIONID` in the root `.env`
+to your own Instagram browser session cookie. Without this value the scraper
+falls back to the original Linux Zen Browser cookie path.
 
 ### 3. Web UI
 
@@ -41,7 +72,13 @@ npm install
 npm run dev
 ```
 
+If npm reports a certificate error on Windows with Node.js 24, run
+`$env:NODE_USE_SYSTEM_CA = '1'` in PowerShell before `npm install`.
+
 Open http://localhost:3000
+
+On Windows, use `.\venv\Scripts\python.exe` instead of `python` for the CLI
+examples below (or activate the virtual environment first).
 
 ## Usage
 

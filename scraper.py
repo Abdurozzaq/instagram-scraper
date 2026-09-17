@@ -9,20 +9,22 @@ import random
 import psycopg2
 from datetime import datetime
 from pathlib import Path
+from dotenv import load_dotenv
 from instagrapi import Client
 from instagrapi.exceptions import LoginRequired, ClientError, PleaseWaitFewMinutes
 
 # Paths
 BASE_DIR = Path(__file__).parent
+load_dotenv(BASE_DIR / ".env")
 STATUS_FILE = BASE_DIR / "scrape_status.json"
 
 # Database config
 DB_CONFIG = {
-    "host": "217.216.72.172",
-    "port": 41828,
-    "user": "mooboard",
-    "password": "MooBoard123!",
-    "database": "ins_loader"
+    "host": os.getenv("PGHOST", "127.0.0.1"),
+    "port": int(os.getenv("PGPORT", "5433")),
+    "user": os.getenv("PGUSER", "instagram_app"),
+    "password": os.environ["PGPASSWORD"],
+    "database": os.getenv("PGDATABASE", "ins_loader")
 }
 
 DELAY_BETWEEN_POSTS = (2, 4)
@@ -53,6 +55,8 @@ class InstagramScraper:
         return self.db_conn
 
     def get_sessionid(self):
+        if os.getenv("INSTAGRAM_SESSIONID"):
+            return os.environ["INSTAGRAM_SESSIONID"]
         db_path = Path.home() / ".var/app/app.zen_browser.zen/.zen/ugeu0vmz.Default (release)/cookies.sqlite"
         if not db_path.exists():
             print("[-] Zen browser cookies not found")
